@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 import * as cdk from "aws-cdk-lib";
-import { CdkWorkshopStack } from "../lib/cdk-workshop-stack";
+import { WorkshopPipelineStack } from "../lib/pipeline-stack";
 
+/**
+ * Entry point for the CDK application.
+ * Creates the WorkshopPipelineStack and deploys it.
+ */
 const app = new cdk.App();
-new CdkWorkshopStack(app, "CdkWorkshopStack", {
-  env: {
-    account: "940593862958",
-    region: "us-east-1",
-  },
-});
+new WorkshopPipelineStack(app, "CdkWorkshopPipelineStack");

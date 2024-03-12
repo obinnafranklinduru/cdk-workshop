@@ -1,19 +1,54 @@
-import { Duration, Stack, StackProps } from 'aws-cdk-lib';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as subs from 'aws-cdk-lib/aws-sns-subscriptions';
-import * as sqs from 'aws-cdk-lib/aws-sqs';
-import { Construct } from 'constructs';
+import * as cdk from "aws-cdk-lib";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as apigw from "aws-cdk-lib/aws-apigateway";
+import { Construct } from "constructs";
+import { HitCounter } from "./hitcounter";
+import { TableViewer } from "cdk-dynamo-table-viewer";
+import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
+import * as path from "path";
 
-export class CdkWorkshopStack extends Stack {
-  constructor(scope: Construct, id: string, props?: StackProps) {
+/**
+ * CdkWorkshopStack represents the AWS CDK stack for the workshop.
+ * This stack defines the infrastructure for a simple serverless application.
+ */
+export class CdkWorkshopStack extends cdk.Stack {
+  public readonly hcViewerUrl: cdk.CfnOutput;
+  public readonly hcEndpoint: cdk.CfnOutput;
+
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const queue = new sqs.Queue(this, 'CdkWorkshopQueue', {
-      visibilityTimeout: Duration.seconds(300)
+    // Define the Lambda function for handling hello requests
+    const hello = new NodejsFunction(this, "HelloHandler", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: path.join(__dirname, "../lambda/hello.ts"),
+      handler: "handler",
     });
 
-    const topic = new sns.Topic(this, 'CdkWorkshopTopic');
+    // Create a HitCounter to count the number of hits on the hello function
+    const helloWithCounter = new HitCounter(this, "HelloHitCounter", {
+      downstream: hello,
+    });
 
-    topic.addSubscription(new subs.SqsSubscription(queue));
+    // Define an API Gateway REST API resource backed by the hello function
+    const gateway = new apigw.LambdaRestApi(this, "Endpoint", {
+      handler: helloWithCounter.handler,
+    });
+
+    // Create a TableViewer to view hit counter data
+    const tv = new TableViewer(this, "ViewHitCounter", {
+      title: "Hello Hits",
+      table: helloWithCounter.table,
+      sortBy: "-hits",
+    });
+
+    // Define CloudFormation outputs for the API Gateway URL and TableViewer URL
+    this.hcEndpoint = new cdk.CfnOutput(this, "GatewayUrl", {
+      value: gateway.url,
+    });
+
+    this.hcViewerUrl = new cdk.CfnOutput(this, "TableViewerUrl", {
+      value: tv.endpoint,
+    });
   }
 }
